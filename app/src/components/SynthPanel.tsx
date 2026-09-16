@@ -1,6 +1,7 @@
 import type { PatchParams } from '../audio/engine'
 import { PARAM_SPECS, type ParamId } from '../audio/levels'
 import { ParamControl } from './Knob'
+import { Scope } from './Scope'
 
 /** Fixed hardware-style layout: the panel always looks the same,
  *  only the availability of each module changes as levels unlock. */
@@ -46,6 +47,7 @@ export function SynthPanel({
             <p>{subtitle}</p>
           </div>
         </div>
+        <Scope active={meterActive} />
         <div className="synth-top-right">
           {children}
           <div className={`vu${meterActive ? ' on' : ''}`}>

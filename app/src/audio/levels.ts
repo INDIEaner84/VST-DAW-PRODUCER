@@ -1,4 +1,5 @@
 import { DEFAULT_PATCH, type PatchParams } from './engine'
+import { PRESETS, PRESET_BY_KEY } from './presets'
 
 export type ParamId = keyof PatchParams
 
@@ -57,6 +58,17 @@ export type Level = {
   lesson: string
   tip?: string
   params: ParamId[] // parameters unlocked & graded in this level
+  /** when set, the target is this fixed iconic patch instead of a random one */
+  presetKey?: string
+}
+
+const ALL: ParamId[] = Object.keys(PARAM_SPECS) as ParamId[]
+
+/** the knobs that actually differ from the default patch – those are what you must dial in */
+function presetParams(key: string): ParamId[] {
+  const pre = PRESET_BY_KEY[key]
+  if (!pre) return ALL
+  return ALL.filter((id) => pre.patch[id] !== DEFAULT_PATCH[id])
 }
 
 export const LEVELS: Level[] = [
@@ -92,9 +104,19 @@ export const LEVELS: Level[] = [
   { id: 21, chapter: 'Mixing & FX', title: 'Reverb & Raum', lesson: 'Reverb setzt den Sound in einen Raum – von trocken bis Kathedrale.', params: ['osc', 'reverb', 'delay', 'cutoff', 'attack', 'release'] },
   { id: 22, chapter: 'Mixing & FX', title: 'Chorus & Bitcrush', lesson: 'Chorus verbreitert stereo und schimmert, Bitcrush macht es lo-fi und digital-dreckig.', params: ['osc', 'chorus', 'bitcrush', 'cutoff', 'resonance', 'attack', 'release'] },
 
-  // ---- Kapitel 6: Meisterprüfung ----
-  { id: 23, chapter: 'Meisterprüfung', title: 'Bass-Design', lesson: 'Alles aus Oszillator, Filter und Hüllkurven kombiniert – baue den Bass exakt nach.', params: ['osc', 'detune', 'subLevel', 'pwm', 'glide', 'filterType', 'cutoff', 'resonance', 'filterEnvAmount', 'fAttack', 'fDecay', 'attack', 'decay', 'sustain', 'release', 'drive'] },
-  { id: 24, chapter: 'Meisterprüfung', title: 'Full Patch', lesson: 'Die finale Prüfung: jeder Parameter des Synths ist im Spiel.', params: Object.keys(PARAM_SPECS) as ParamId[] },
+  // ---- Kapitel 6: Legendäre Sounds (feste Presets) ----
+  ...PRESETS.map((pre, i) => ({
+    id: 23 + i,
+    chapter: 'Legendäre Sounds',
+    title: pre.name,
+    lesson: `${pre.brief} — ${pre.origin}`,
+    tip: 'Fester Zielklang: dieser Sound ist immer gleich. Arbeite dich Modul für Modul vor.',
+    params: presetParams(pre.key),
+    presetKey: pre.key,
+  })),
+
+  // ---- Kapitel 7: Meisterprüfung ----
+  { id: 23 + PRESETS.length, chapter: 'Meisterprüfung', title: 'Full Patch', lesson: 'Die finale Prüfung: jeder Parameter des Synths ist im Spiel – und das Ziel ist wieder zufällig.', params: ALL },
 ]
 
 const rnd = (a: number, b: number) => a + Math.random() * (b - a)
@@ -112,6 +134,7 @@ export function gradedParams(level: Level, target: PatchParams): ParamId[] {
 }
 
 export function randomTarget(level: Level): PatchParams {
+  if (level.presetKey && PRESET_BY_KEY[level.presetKey]) return { ...PRESET_BY_KEY[level.presetKey].patch }
   const t: PatchParams = { ...DEFAULT_PATCH }
   // levels that teach pulse width always use a square/pulse oscillator
   if (level.params.includes('pwm') && !level.params.includes('osc')) t.osc = 'square'
@@ -122,7 +145,10 @@ export function randomTarget(level: Level): PatchParams {
       ;(t as Record<string, unknown>)[id] = c[Math.floor(Math.random() * c.length)]
     } else if (s.log) {
       const v = Math.exp(rnd(Math.log(s.min!), Math.log(s.max!)))
-      ;(t as Record<string, unknown>)[id] = Math.round(v)
+      // keep small log-scaled values (e.g. LFO rate 0.1 Hz) from rounding down to 0
+      const st = s.step ?? 0.01
+      const q = v >= 100 ? Math.round(v) : Math.round(v / st) * st
+      ;(t as Record<string, unknown>)[id] = Math.max(s.min!, q)
     } else {
       const v = rnd(s.min!, s.max!)
       const st = s.step ?? 0.01

@@ -28,7 +28,8 @@ export function Knob({
       const c = Math.max(0, Math.min(1, n))
       const v = spec.log ? Math.exp(Math.log(min) + c * (Math.log(max) - Math.log(min))) : min + c * (max - min)
       const st = spec.step ?? 0.01
-      return spec.log ? Math.round(v) : Math.round(v / st) * st
+      const q = spec.log && v >= 100 ? Math.round(v) : Math.round(v / st) * st
+      return Math.max(min, Math.min(max, q))
     },
     [spec.log, spec.step, min, max],
   )

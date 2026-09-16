@@ -135,6 +135,7 @@ export function EarTrainer() {
           <span className="lb-chapter">{level.chapter}</span>
           <span className="lb-sep">/</span>
           <span className="lb-title">Level {level.id} · {level.title}</span>
+          {level.presetKey && <span className="badge-legend">LEGENDE</span>}
         </button>
         <div className="lb-right">
           <span className="lb-stars">{'★'.repeat(stars[level.id] ?? 0).padEnd(3, '☆')}</span>
@@ -192,14 +193,14 @@ export function EarTrainer() {
         onChange={(id, v) => setGuess((g) => ({ ...g, [id]: v }))}
       >
         <div className="task-chip">
-          <small>AUFGABE</small>
+          <small>{level.presetKey ? 'LEGENDE' : 'AUFGABE'}</small>
           <span>{gradedSet.size} Regler</span>
         </div>
       </SynthPanel>
 
       <div className="actionbar">
         <button className="big primary" onClick={check}>✓ Prüfen</button>
-        <button className="big" onClick={() => newRound()}>⟳ Neue Aufgabe</button>
+        <button className="big" onClick={() => newRound()}>{level.presetKey ? '⟳ Zurücksetzen' : '⟳ Neue Aufgabe'}</button>
         <button className="big ghost" onClick={reveal}>👁 Lösung zeigen</button>
       </div>
 

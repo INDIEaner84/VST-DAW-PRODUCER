@@ -307,3 +307,31 @@ body { margin: 0; background: var(--bg); color: var(--txt); font-family: 'Inter'
   .synth-body { grid-template-columns: 1fr 1fr; }
   .brandplate h2 { font-size: 15px; letter-spacing: 3px; }
 }
+
+/* ---------- Scope (CRT) ---------- */
+.scope {
+  position: relative; width: 210px; height: 66px; flex-shrink: 0;
+  border-radius: 6px; overflow: hidden;
+  background: radial-gradient(ellipse at 50% 45%, #0d1b16 0%, #060a08 80%);
+  border: 1px solid #0b0a09; box-shadow: inset 0 0 14px rgba(0,0,0,.9), 0 0 0 3px #1d1b18;
+}
+.scope canvas { width: 100%; height: 100%; display: block; opacity: .65; transition: opacity .25s; }
+.scope.live canvas { opacity: 1; }
+.scope-overlay {
+  position: absolute; inset: 0; pointer-events: none;
+  background: repeating-linear-gradient(0deg, rgba(0,0,0,.28) 0 1px, transparent 1px 3px);
+}
+.scope-ctl { position: absolute; top: 3px; right: 3px; display: flex; gap: 2px; }
+.scope-ctl button {
+  background: rgba(10,20,16,.85); border: 1px solid #23453a; color: #4bf0a8;
+  font-size: 7px; letter-spacing: 1px; padding: 2px 5px; border-radius: 3px; cursor: pointer;
+  font-family: 'Courier New', monospace;
+}
+.scope-ctl button.on { background: #4bf0a8; color: #061410; font-weight: 700; }
+
+.badge-legend {
+  font-size: 8px; letter-spacing: 1.6px; padding: 2px 6px; border-radius: 4px;
+  background: linear-gradient(180deg, #ffc456, var(--acc)); color: #221a08; font-weight: 700; flex-shrink: 0;
+}
+
+@media (max-width: 760px) { .scope { width: 100%; order: 3; } }
