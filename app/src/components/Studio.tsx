@@ -4,9 +4,11 @@ import { DEFAULT_PATCH, SynthVoice, startAudio, type PatchParams } from '../audi
 import { DRUM_LABELS, DRUM_ORDER, DRUM_PRESETS, DrumMachine, PAD_NOTE_MAP, emptyPattern, type DrumId, type DrumPattern } from '../audio/drums'
 import { KEYS, PROGRESSIONS, SCALES, chordNotes, midiToNote, parseRoman } from '../audio/theory'
 import { PARAM_SPECS, type ParamId } from '../audio/levels'
-import { ParamControl } from './Knob'
+import { SynthPanel } from './SynthPanel'
 import { KEY_TO_SEMITONE, useMidi } from '../midi/useMidi'
 import { Section } from './Section'
+
+const ALL_PARAMS = new Set(Object.keys(PARAM_SPECS) as ParamId[])
 
 export type Note = { id: string; midi: number; start: number; len: number; vel: number } // start/len in 16th steps
 
@@ -393,18 +395,13 @@ export function Studio() {
       </Section>
 
       <Section title="Sound Design" hint="derselbe Synth wie im Ear-Trainer" defaultOpen={false}>
-        <div className="panels">
-          {(['Oscillator', 'Noise', 'Filter', 'Amp Envelope', 'Filter Envelope', 'LFO', 'EQ', 'FX'] as const).map((grp) => (
-            <div className="panel" key={grp}>
-              <h4>{grp}</h4>
-              {(Object.keys(PARAM_SPECS) as ParamId[])
-                .filter((id) => PARAM_SPECS[id].group === grp)
-                .map((id) => (
-                  <ParamControl key={id} spec={PARAM_SPECS[id]} value={patch[id] as number | string} onChange={(v) => setPatch((p) => ({ ...p, [id]: v }))} />
-                ))}
-            </div>
-          ))}
-        </div>
+        <SynthPanel
+          patch={patch}
+          available={ALL_PARAMS}
+          onChange={(id, v) => setPatch((p) => ({ ...p, [id]: v }))}
+          subtitle="STUDIO VOICE · ALLE MODULE FREI"
+          meterActive={playing}
+        />
       </Section>
     </div>
   )

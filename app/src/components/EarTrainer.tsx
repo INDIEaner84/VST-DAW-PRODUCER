@@ -2,9 +2,16 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { DEFAULT_PATCH, SynthVoice, startAudio, type PatchParams } from '../audio/engine'
 import { LEVELS, PARAM_SPECS, gradedParams, randomTarget, scoreGuess, type ParamId } from '../audio/levels'
-import { ParamControl } from './Knob'
+import { SynthPanel } from './SynthPanel'
 
 const DEMO_NOTES = ['C3', 'E3', 'G3', 'C4']
+
+/** everything unlocked up to and including this level */
+function unlockedParams(levelId: number): Set<ParamId> {
+  const s = new Set<ParamId>()
+  for (const l of LEVELS) if (l.id <= levelId) l.params.forEach((p) => s.add(p))
+  return s
+}
 
 export function EarTrainer() {
   const [levelIdx, setLevelIdx] = useState(0)
@@ -14,6 +21,7 @@ export function EarTrainer() {
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [lessonOpen, setLessonOpen] = useState(false)
   const [playingWhich, setPlayingWhich] = useState<'target' | 'guess' | null>(null)
+  const [newlyUnlocked, setNewlyUnlocked] = useState<ParamId[]>([])
   const [stars, setStars] = useState<Record<number, number>>(() =>
     JSON.parse(localStorage.getItem('vdp.stars') ?? '{}'),
   )
@@ -23,6 +31,9 @@ export function EarTrainer() {
 
   const level = LEVELS[levelIdx]
   const graded = useMemo(() => gradedParams(level, target), [level, target])
+  // knobs the player may turn: everything taught so far
+  const available = useMemo(() => unlockedParams(level.id), [level.id])
+  const gradedSet = useMemo(() => new Set(graded), [graded])
 
   useEffect(() => {
     if (!targetSynth.current) targetSynth.current = new SynthVoice()
@@ -32,11 +43,21 @@ export function EarTrainer() {
   useEffect(() => void guessSynth.current?.apply(guess), [guess])
   useEffect(() => void targetSynth.current?.apply(target), [target])
 
-  // close drawer with Escape, play with Space
+  // show which knobs this level adds
+  useEffect(() => {
+    const prev = levelIdx > 0 ? unlockedParams(LEVELS[levelIdx - 1].id) : new Set<ParamId>()
+    const fresh = level.params.filter((p) => !prev.has(p))
+    setNewlyUnlocked(fresh)
+    if (fresh.length) {
+      const t = setTimeout(() => setNewlyUnlocked([]), 4000)
+      return () => clearTimeout(t)
+    }
+  }, [levelIdx, level.params])
+
   useEffect(() => {
     const h = (e: KeyboardEvent) => {
       if (e.key === 'Escape') setDrawerOpen(false)
-      if (e.code === 'Space' && !(e.target as HTMLElement)?.closest?.('input,select,button')) {
+      if (e.code === 'Space' && !(e.target as HTMLElement)?.closest?.('input,select,button,[role=slider]')) {
         e.preventDefault()
         play('target')
       }
@@ -88,14 +109,11 @@ export function EarTrainer() {
     setResult(scoreGuess(level, target, target))
   }
 
-  const grouped = useMemo(() => {
-    const g: Record<string, ParamId[]> = {}
-    for (const id of graded) {
-      const grp = PARAM_SPECS[id].group
-      ;(g[grp] ??= []).push(id)
-    }
-    return g
-  }, [graded])
+  const states = useMemo(() => {
+    const m: Partial<Record<ParamId, 'ok' | 'off'>> = {}
+    result?.details.forEach((d) => (m[d.id] = d.ok ? 'ok' : 'off'))
+    return m
+  }, [result])
 
   const chapters = useMemo(() => {
     const m: { name: string; levels: typeof LEVELS }[] = []
@@ -111,7 +129,6 @@ export function EarTrainer() {
 
   return (
     <div className="trainer focus">
-      {/* --- slim level bar --- */}
       <div className="levelbar">
         <button className="drawer-toggle" onClick={() => setDrawerOpen(true)} title="Level wählen">
           <span className="burger">☰</span>
@@ -121,8 +138,9 @@ export function EarTrainer() {
         </button>
         <div className="lb-right">
           <span className="lb-stars">{'★'.repeat(stars[level.id] ?? 0).padEnd(3, '☆')}</span>
+          <span className="lb-prog">{available.size} Regler frei</span>
           <span className="lb-prog">{doneCount}/{LEVELS.length}</span>
-          <button className={`icon-btn${lessonOpen ? ' on' : ''}`} onClick={() => setLessonOpen((v) => !v)} title="Lektion anzeigen">?</button>
+          <button className={`icon-btn${lessonOpen ? ' on' : ''}`} onClick={() => setLessonOpen((v) => !v)} title="Lektion">?</button>
         </div>
       </div>
 
@@ -133,64 +151,58 @@ export function EarTrainer() {
         </div>
       )}
 
-      {/* --- focus stage --- */}
-      <div className="stage">
-        <div className="ab-compare">
-          <button className={`ab target${playingWhich === 'target' ? ' ringing' : ''}`} onClick={() => play('target')}>
-            <span className="ab-label">Zielsound</span>
-            <span className="ab-play">▶</span>
-            <span className="ab-hint">Leertaste</span>
-          </button>
-          <div className="ab-vs">A / B</div>
-          <button className={`ab mine${playingWhich === 'guess' ? ' ringing' : ''}`} onClick={() => play('guess')}>
-            <span className="ab-label">Dein Sound</span>
-            <span className="ab-play">▶</span>
-            <span className="ab-hint">vergleichen</span>
-          </button>
+      {newlyUnlocked.length > 0 && (
+        <div className="unlock-toast">
+          🔓 Neu freigeschaltet: <strong>{newlyUnlocked.map((p) => PARAM_SPECS[p].label).join(' · ')}</strong>
         </div>
+      )}
 
-        {result && (
-          <div className={`result ${result.passed ? 'pass' : 'fail'}`}>
-            <div className="res-bar"><div className="res-fill" style={{ width: `${result.percent}%` }} /></div>
-            <div className="res-text">
-              <strong>{result.passed ? '🎉 Geschafft!' : 'Noch nicht ganz'}</strong>
-              <span>{result.percent}% Treffer</span>
-              {result.passed
-                ? levelIdx < LEVELS.length - 1 && <button className="big primary sm" onClick={goNext}>Nächstes Level →</button>
-                : <span className="dim">rot markierte Regler weiter justieren</span>}
-            </div>
-          </div>
-        )}
-
-        <div className="panels">
-          {Object.entries(grouped).map(([group, ids]) => (
-            <div className="panel" key={group}>
-              <h4>{group}</h4>
-              {ids.map((id) => {
-                const det = result?.details.find((d) => d.id === id)
-                return (
-                  <ParamControl
-                    key={id}
-                    spec={PARAM_SPECS[id]}
-                    value={guess[id] as number | string}
-                    state={det ? (det.ok ? 'ok' : 'off') : 'neutral'}
-                    onChange={(v) => setGuess((g) => ({ ...g, [id]: v }))}
-                  />
-                )
-              })}
-            </div>
-          ))}
-        </div>
+      <div className="ab-compare">
+        <button className={`ab target${playingWhich === 'target' ? ' ringing' : ''}`} onClick={() => play('target')}>
+          <span className="ab-label">Zielsound</span>
+          <span className="ab-play">▶</span>
+          <span className="ab-hint">Leertaste</span>
+        </button>
+        <div className="ab-vs">A / B</div>
+        <button className={`ab mine${playingWhich === 'guess' ? ' ringing' : ''}`} onClick={() => play('guess')}>
+          <span className="ab-label">Dein Sound</span>
+          <span className="ab-play">▶</span>
+          <span className="ab-hint">vergleichen</span>
+        </button>
       </div>
 
-      {/* --- sticky action bar --- */}
+      {result && (
+        <div className={`result ${result.passed ? 'pass' : 'fail'}`}>
+          <div className="res-bar"><div className="res-fill" style={{ width: `${result.percent}%` }} /></div>
+          <div className="res-text">
+            <strong>{result.passed ? '🎉 Geschafft!' : 'Noch nicht ganz'}</strong>
+            <span>{result.percent}% Treffer</span>
+            {result.passed
+              ? levelIdx < LEVELS.length - 1 && <button className="big primary sm" onClick={goNext}>Nächstes Level →</button>
+              : <span className="dim">rot leuchtende Regler weiter justieren</span>}
+          </div>
+        </div>
+      )}
+
+      <SynthPanel
+        patch={guess}
+        available={available}
+        states={states}
+        meterActive={playingWhich !== null}
+        onChange={(id, v) => setGuess((g) => ({ ...g, [id]: v }))}
+      >
+        <div className="task-chip">
+          <small>AUFGABE</small>
+          <span>{gradedSet.size} Regler</span>
+        </div>
+      </SynthPanel>
+
       <div className="actionbar">
         <button className="big primary" onClick={check}>✓ Prüfen</button>
         <button className="big" onClick={() => newRound()}>⟳ Neue Aufgabe</button>
         <button className="big ghost" onClick={reveal}>👁 Lösung zeigen</button>
       </div>
 
-      {/* --- level drawer --- */}
       {drawerOpen && <div className="scrim" onClick={() => setDrawerOpen(false)} />}
       <aside className={`drawer${drawerOpen ? ' open' : ''}`}>
         <div className="drawer-head">
