@@ -1,0 +1,257 @@
+import { useEffect, useMemo, useRef, useState } from 'react'
+import * as Tone from 'tone'
+import { DEFAULT_PATCH, SynthVoice, startAudio, type PatchParams } from '../audio/engine'
+import { LEVELS, PARAM_SPECS, gradedParams, randomTarget, scoreGuess, type ParamId } from '../audio/levels'
+import { SynthPanel } from './SynthPanel'
+
+const DEMO_NOTES = ['C3', 'E3', 'G3', 'C4']
+
+/** everything unlocked up to and including this level */
+function unlockedParams(levelId: number): Set<ParamId> {
+  const s = new Set<ParamId>()
+  for (const l of LEVELS) if (l.id <= levelId) l.params.forEach((p) => s.add(p))
+  return s
+}
+
+export function EarTrainer() {
+  const [levelIdx, setLevelIdx] = useState(0)
+  const [target, setTarget] = useState<PatchParams>(() => randomTarget(LEVELS[0]))
+  const [guess, setGuess] = useState<PatchParams>({ ...DEFAULT_PATCH })
+  const [result, setResult] = useState<ReturnType<typeof scoreGuess> | null>(null)
+  const [revealed, setRevealed] = useState(false)
+  const [drawerOpen, setDrawerOpen] = useState(false)
+  const [lessonOpen, setLessonOpen] = useState(false)
+  const [playingWhich, setPlayingWhich] = useState<'target' | 'guess' | null>(null)
+  const [stars, setStars] = useState<Record<number, number>>(() =>
+    JSON.parse(localStorage.getItem('vdp.stars') ?? '{}'),
+  )
+  const [unlocked, setUnlocked] = useState<number>(() => Number(localStorage.getItem('vdp.unlocked') ?? 1))
+  const targetSynth = useRef<SynthVoice | null>(null)
+  const guessSynth = useRef<SynthVoice | null>(null)
+
+  const level = LEVELS[levelIdx]
+  const graded = useMemo(() => gradedParams(level, target), [level, target])
+  // knobs the player may turn: everything taught so far
+  const available = useMemo(() => unlockedParams(level.id), [level.id])
+  const gradedSet = useMemo(() => new Set(graded), [graded])
+
+  useEffect(() => {
+    if (!targetSynth.current) targetSynth.current = new SynthVoice()
+    if (!guessSynth.current) guessSynth.current = new SynthVoice()
+  }, [])
+
+  useEffect(() => void guessSynth.current?.apply(guess), [guess])
+  useEffect(() => void targetSynth.current?.apply(target), [target])
+
+  // derived during render – no effect, no cascading re-render
+  const newlyUnlocked = useMemo(() => {
+    const prev = levelIdx > 0 ? unlockedParams(LEVELS[levelIdx - 1].id) : new Set<ParamId>()
+    return level.params.filter((p) => !prev.has(p))
+  }, [levelIdx, level.params])
+
+  // auto-hide the unlock banner without touching state during render
+  const [bannerFor, setBannerFor] = useState<number | null>(level.id)
+  useEffect(() => {
+    setBannerFor(level.id)
+    const t = setTimeout(() => setBannerFor(null), 4500)
+    return () => clearTimeout(t)
+  }, [level.id])
+  const showUnlock = bannerFor === level.id && newlyUnlocked.length > 0
+
+  useEffect(() => {
+    const h = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawerOpen(false)
+      if (e.code === 'Space' && !(e.target as HTMLElement)?.closest?.('input,select,button,[role=slider]')) {
+        e.preventDefault()
+        play('target')
+      }
+    }
+    window.addEventListener('keydown', h)
+    return () => window.removeEventListener('keydown', h)
+  })
+
+  const play = async (which: 'target' | 'guess') => {
+    await startAudio()
+    const s = which === 'target' ? targetSynth.current : guessSynth.current
+    if (!s) return
+    s.apply(which === 'target' ? target : guess)
+    setPlayingWhich(which)
+    const now = Tone.now() + 0.05
+    DEMO_NOTES.forEach((n, i) => s.playNote(n, '8n', now + i * 0.28, 0.8))
+    s.playNote('C4', '2n', now + DEMO_NOTES.length * 0.28 + 0.1, 0.8)
+    setTimeout(() => setPlayingWhich(null), 2400)
+  }
+
+  const newRound = (idx = levelIdx) => {
+    setTarget(randomTarget(LEVELS[idx]))
+    setGuess({ ...DEFAULT_PATCH })
+    setResult(null)
+    setRevealed(false)
+  }
+
+  const check = () => {
+    const r = scoreGuess(level, target, guess)
+    setResult(r)
+    // revealing the answer must not earn stars or unlock the next level
+    if (r.passed && !revealed) {
+      const st = r.percent >= 95 ? 3 : r.percent >= 85 ? 2 : 1
+      const next = { ...stars, [level.id]: Math.max(stars[level.id] ?? 0, st) }
+      setStars(next)
+      localStorage.setItem('vdp.stars', JSON.stringify(next))
+      const nu = Math.max(unlocked, Math.min(LEVELS.length, level.id + 1))
+      setUnlocked(nu)
+      localStorage.setItem('vdp.unlocked', String(nu))
+    }
+  }
+
+  const goNext = () => {
+    const ni = Math.min(LEVELS.length - 1, levelIdx + 1)
+    setLevelIdx(ni)
+    newRound(ni)
+  }
+
+  const reveal = () => {
+    setGuess({ ...target })
+    setResult(scoreGuess(level, target, target))
+    setRevealed(true)
+  }
+
+  const states = useMemo(() => {
+    const m: Partial<Record<ParamId, 'ok' | 'off'>> = {}
+    result?.details.forEach((d) => (m[d.id] = d.ok ? 'ok' : 'off'))
+    return m
+  }, [result])
+
+  const chapters = useMemo(() => {
+    const m: { name: string; levels: typeof LEVELS }[] = []
+    for (const l of LEVELS) {
+      const last = m[m.length - 1]
+      if (last && last.name === l.chapter) last.levels.push(l)
+      else m.push({ name: l.chapter, levels: [l] })
+    }
+    return m
+  }, [])
+
+  const doneCount = Object.keys(stars).length
+
+  return (
+    <div className="trainer focus">
+      <div className="levelbar">
+        <button className="drawer-toggle" onClick={() => setDrawerOpen(true)} title="Level wählen">
+          <span className="burger">☰</span>
+          <span className="lb-chapter">{level.chapter}</span>
+          <span className="lb-sep">/</span>
+          <span className="lb-title">Level {level.id} · {level.title}</span>
+          {level.presetKey && <span className="badge-legend">LEGENDE</span>}
+        </button>
+        <div className="lb-right">
+          <span className="lb-stars">{'★'.repeat(stars[level.id] ?? 0).padEnd(3, '☆')}</span>
+          <span className="lb-prog">{available.size} Regler frei</span>
+          <span className="lb-prog">{doneCount}/{LEVELS.length}</span>
+          <button className={`icon-btn${lessonOpen ? ' on' : ''}`} onClick={() => setLessonOpen((v) => !v)} title="Lektion">?</button>
+        </div>
+      </div>
+
+      {lessonOpen && (
+        <div className="lesson-pop">
+          <p>{level.lesson}</p>
+          {level.tip && <p className="tip">💡 {level.tip}</p>}
+        </div>
+      )}
+
+      {showUnlock && (
+        <div className="unlock-toast">
+          🔓 Neu freigeschaltet: <strong>{newlyUnlocked.map((p) => PARAM_SPECS[p].label).join(' · ')}</strong>
+        </div>
+      )}
+
+      <div className="ab-compare">
+        <button className={`ab target${playingWhich === 'target' ? ' ringing' : ''}`} onClick={() => play('target')}>
+          <span className="ab-label">Zielsound</span>
+          <span className="ab-play">▶</span>
+          <span className="ab-hint">Leertaste</span>
+        </button>
+        <div className="ab-vs">A / B</div>
+        <button className={`ab mine${playingWhich === 'guess' ? ' ringing' : ''}`} onClick={() => play('guess')}>
+          <span className="ab-label">Dein Sound</span>
+          <span className="ab-play">▶</span>
+          <span className="ab-hint">vergleichen</span>
+        </button>
+      </div>
+
+      {result && (
+        <div className={`result ${revealed ? 'reveal' : result.passed ? 'pass' : 'fail'}`}>
+          <div className="res-bar"><div className="res-fill" style={{ width: `${result.percent}%` }} /></div>
+          <div className="res-text">
+            <strong>{revealed ? '👁 Lösung' : result.passed ? '🎉 Geschafft!' : 'Noch nicht ganz'}</strong>
+            <span>{revealed ? 'So sieht der Zielsound aus' : `${result.percent}% Treffer`}</span>
+            {revealed ? (
+              <>
+                <span className="dim">zählt nicht als bestanden</span>
+                <button className="big primary sm" onClick={() => newRound()}>Nochmal versuchen</button>
+              </>
+            ) : result.passed ? (
+              levelIdx < LEVELS.length - 1 && <button className="big primary sm" onClick={goNext}>Nächstes Level →</button>
+            ) : (
+              <span className="dim">rot leuchtende Regler weiter justieren</span>
+            )}
+          </div>
+        </div>
+      )}
+
+      <SynthPanel
+        patch={guess}
+        available={available}
+        states={states}
+        meterActive={playingWhich !== null}
+        onChange={(id, v) => setGuess((g) => ({ ...g, [id]: v }))}
+      >
+        <div className="task-chip">
+          <small>{level.presetKey ? 'LEGENDE' : 'AUFGABE'}</small>
+          <span>{gradedSet.size} Regler</span>
+        </div>
+      </SynthPanel>
+
+      <div className="actionbar">
+        <button className="big primary" onClick={check}>✓ Prüfen</button>
+        <button className="big" onClick={() => newRound()}>{level.presetKey ? '⟳ Zurücksetzen' : '⟳ Neue Aufgabe'}</button>
+        <button className="big ghost" onClick={reveal}>👁 Lösung zeigen</button>
+      </div>
+
+      {drawerOpen && <div className="scrim" onClick={() => setDrawerOpen(false)} />}
+      <aside className={`drawer${drawerOpen ? ' open' : ''}`}>
+        <div className="drawer-head">
+          <h3>Level · {doneCount}/{LEVELS.length}</h3>
+          <button className="icon-btn" onClick={() => setDrawerOpen(false)}>✕</button>
+        </div>
+        <div className="drawer-body">
+          {chapters.map((ch) => (
+            <div key={ch.name} className="chapter">
+              <h5>{ch.name}</h5>
+              {ch.levels.map((l) => {
+                const locked = l.id > unlocked
+                return (
+                  <button
+                    key={l.id}
+                    className={`level-btn${l.id === level.id ? ' active' : ''}${locked ? ' locked' : ''}`}
+                    disabled={locked}
+                    onClick={() => {
+                      const i = LEVELS.findIndex((x) => x.id === l.id)
+                      setLevelIdx(i)
+                      newRound(i)
+                      setDrawerOpen(false)
+                    }}
+                  >
+                    <span className="lv-num">{l.id}</span>
+                    <span className="lv-title">{l.title}</span>
+                    <span className="lv-stars">{'★'.repeat(stars[l.id] ?? 0) || (locked ? '🔒' : '')}</span>
+                  </button>
+                )
+              })}
+            </div>
+          ))}
+        </div>
+      </aside>
+    </div>
+  )
+}
