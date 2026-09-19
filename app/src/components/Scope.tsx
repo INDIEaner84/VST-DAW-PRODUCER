@@ -13,11 +13,21 @@ export function Scope({ active }: { active?: boolean }) {
   }, [mode])
 
   useEffect(() => {
-    const wave = new Tone.Analyser('waveform', 1024)
-    const fft = new Tone.Analyser('fft', 256)
-    const dest = Tone.getDestination()
-    dest.connect(wave)
-    dest.connect(fft)
+    // The visualiser is purely decorative: if Web Audio is unavailable it must
+    // degrade to an empty canvas instead of taking the surrounding panel down.
+    let wave: Tone.Analyser
+    let fft: Tone.Analyser
+    let dest: ReturnType<typeof Tone.getDestination>
+    try {
+      wave = new Tone.Analyser('waveform', 1024)
+      fft = new Tone.Analyser('fft', 256)
+      dest = Tone.getDestination()
+      dest.connect(wave)
+      dest.connect(fft)
+    } catch (e) {
+      console.error('Scope: Audio-Analyse nicht verfügbar:', e)
+      return
+    }
 
     let raf = 0
     const draw = () => {

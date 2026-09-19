@@ -2,6 +2,7 @@ import { useState } from 'react'
 import './App.css'
 import { EarTrainer } from './components/EarTrainer'
 import { Studio } from './components/Studio'
+import { ErrorBoundary } from './components/ErrorBoundary'
 
 export default function App() {
   const [tab, setTab] = useState<'train' | 'studio'>('train')
@@ -28,8 +29,8 @@ export default function App() {
       </header>
       {/* The studio holds unsaved musical work, so it stays mounted once opened and
           is only hidden – unmounting it would discard notes, patterns and playback state. */}
-      <div hidden={tab !== 'train'}>{tab === 'train' && <EarTrainer />}</div>
-      {studioOpened && <div hidden={tab !== 'studio'}><Studio /></div>}
+      <div hidden={tab !== 'train'}>{tab === 'train' && <ErrorBoundary label="Trainer konnte nicht geladen werden"><EarTrainer /></ErrorBoundary>}</div>
+      {studioOpened && <div hidden={tab !== 'studio'}><ErrorBoundary label="Studio konnte nicht geladen werden"><Studio /></ErrorBoundary></div>}
     </div>
   )
 }

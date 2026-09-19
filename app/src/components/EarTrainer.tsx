@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import * as Tone from 'tone'
 import { DEFAULT_PATCH, SynthVoice, startAudio, type PatchParams } from '../audio/engine'
 import { LEVELS, PARAM_SPECS, gradedParams, randomTarget, scoreGuess, type ParamId } from '../audio/levels'
@@ -19,6 +19,7 @@ export function EarTrainer() {
   const [guess, setGuess] = useState<PatchParams>({ ...DEFAULT_PATCH })
   const [result, setResult] = useState<ReturnType<typeof scoreGuess> | null>(null)
   const [revealed, setRevealed] = useState(false)
+  const [audioError, setAudioError] = useState<string | null>(null)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [lessonOpen, setLessonOpen] = useState(false)
   const [playingWhich, setPlayingWhich] = useState<'target' | 'guess' | null>(null)
@@ -35,9 +36,19 @@ export function EarTrainer() {
   const available = useMemo(() => unlockedParams(level.id), [level.id])
   const gradedSet = useMemo(() => new Set(graded), [graded])
 
-  useEffect(() => {
-    if (!targetSynth.current) targetSynth.current = new SynthVoice()
-    if (!guessSynth.current) guessSynth.current = new SynthVoice()
+  // Audio nodes are built on demand (after a user gesture), never during mount:
+  // constructing them eagerly throws in browsers that block Web Audio before
+  // interaction, which used to take the whole React tree down with it.
+  const ensureSynths = useCallback(() => {
+    try {
+      targetSynth.current ??= new SynthVoice()
+      guessSynth.current ??= new SynthVoice()
+      return true
+    } catch (e) {
+      console.error('Audio konnte nicht initialisiert werden:', e)
+      setAudioError('Audio konnte nicht gestartet werden. Bitte Seite neu laden.')
+      return false
+    }
   }, [])
 
   useEffect(() => void guessSynth.current?.apply(guess), [guess])
@@ -71,7 +82,14 @@ export function EarTrainer() {
   })
 
   const play = async (which: 'target' | 'guess') => {
-    await startAudio()
+    try {
+      await startAudio()
+    } catch (e) {
+      console.error(e)
+      setAudioError('Audio konnte nicht gestartet werden.')
+      return
+    }
+    if (!ensureSynths()) return
     const s = which === 'target' ? targetSynth.current : guessSynth.current
     if (!s) return
     s.apply(which === 'target' ? target : guess)
@@ -151,6 +169,8 @@ export function EarTrainer() {
           <button className={`icon-btn${lessonOpen ? ' on' : ''}`} onClick={() => setLessonOpen((v) => !v)} title="Lektion">?</button>
         </div>
       </div>
+
+      {audioError && <div className="audio-error">⚠ {audioError}</div>}
 
       {lessonOpen && (
         <div className="lesson-pop">

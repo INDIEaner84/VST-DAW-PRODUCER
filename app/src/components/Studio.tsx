@@ -67,16 +67,29 @@ export function Studio() {
   patternRef.current = pattern
   recRef.current = recMode
 
+  const [audioError, setAudioError] = useState<string | null>(null)
   const prog = PROGRESSIONS[progIdx]
   const scale = SCALES[prog.scale]
   const chords = useMemo(() => prog.degrees.map((d) => parseRoman(d, keyRoot, scale)), [prog, keyRoot, scale])
 
-  useEffect(() => {
-    synth.current ??= new SynthVoice()
-    chordSynth.current ??= new SynthVoice()
-    drums.current ??= new DrumMachine()
-    chordSynth.current.apply({ ...DEFAULT_PATCH, osc: 'triangle', cutoff: 2200, attack: 0.05, release: 0.8, reverb: 0.4, subLevel: 0.2 })
-  }, [])
+  // Built lazily on first user gesture, not at mount: eager Web Audio construction
+  // throws before interaction and would blank the entire page.
+  const ensureAudio = useCallback(() => {
+    try {
+      synth.current ??= new SynthVoice()
+      chordSynth.current ??= new SynthVoice()
+      if (!drums.current) {
+        drums.current = new DrumMachine()
+        chordSynth.current.apply({ ...DEFAULT_PATCH, osc: 'triangle', cutoff: 2200, attack: 0.05, release: 0.8, reverb: 0.4, subLevel: 0.2 })
+      }
+      synth.current.apply(patch)
+      return true
+    } catch (e) {
+      console.error('Audio konnte nicht initialisiert werden:', e)
+      setAudioError('Audio konnte nicht gestartet werden. Bitte Seite neu laden.')
+      return false
+    }
+  }, [patch])
 
   useEffect(() => synth.current?.apply(patch), [patch])
   useEffect(() => {
@@ -140,10 +153,11 @@ export function Studio() {
   const noteOn = useCallback(
     (midi: number, vel = 0.8) => {
       startAudio()
+      if (!ensureAudio()) return
       synth.current?.noteOn(midiToNote(midi), vel)
       if (playingRef.current && recRef.current !== 'off') heldRef.current.set(midi, { start: currentStep(), vel })
     },
-    [currentStep],
+    [currentStep, ensureAudio],
   )
 
   const noteOff = useCallback(
@@ -219,6 +233,7 @@ export function Studio() {
 
   const toggle = async () => {
     await startAudio()
+    if (!ensureAudio()) return
     const t = Tone.getTransport()
     if (t.state === 'started') {
       t.stop()
@@ -377,6 +392,7 @@ export function Studio() {
     <div className="studio">
       {toast && <div className="toast" role="status">{toast}</div>}
 
+      {audioError && <div className="audio-error">⚠ {audioError}</div>}
       <div className="projectbar">
         <span className="pb-icon">💾</span>
         <input
@@ -452,6 +468,7 @@ export function Studio() {
               <button key={i} className={`chord ${playing && Math.floor(pos / STEPS_PER_BAR) % chords.length === i ? 'active' : ''}`}
                 onMouseDown={async () => {
                   await startAudio()
+                  if (!ensureAudio()) return
                   chordNotes(c, 3).forEach((n) => chordSynth.current?.playNote(n, '2n', undefined, 0.5))
                 }}>
                 <span className="roman">{c.roman}</span>
@@ -537,6 +554,7 @@ export function Studio() {
                 className={`pad${flash === d ? ' flash' : ''}`}
                 onMouseDown={async () => {
                   await startAudio()
+                  if (!ensureAudio()) return
                   drums.current?.trigger(d)
                   setFlash(d)
                   setTimeout(() => setFlash(null), 120)
