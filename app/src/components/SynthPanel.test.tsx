@@ -66,3 +66,50 @@ describe('SynthPanel', () => {
     expect(container.querySelectorAll('.knob-wrap.off')).toHaveLength(1)
   })
 })
+
+describe('SynthPanel: Kompaktmodus', () => {
+  it('blendet gesperrte Regler komplett aus statt sie auszugrauen', () => {
+    const avail = unlockedThrough(1) // Level 1: nur der Wellenform-Schalter
+    const { container } = render(
+      <SynthPanel patch={DEFAULT_PATCH} available={avail} compact onChange={() => {}} />,
+    )
+    // kein einziges gesperrtes Element bleibt uebrig
+    expect(container.querySelectorAll('.locked')).toHaveLength(0)
+    // und genau so viele Bedienelemente wie freigeschaltete Parameter
+    const controls = container.querySelectorAll('.knob-wrap, .switch-wrap')
+    expect(controls).toHaveLength(avail.size)
+  })
+
+  it('zeigt nur Module, die mindestens einen freien Regler haben', () => {
+    const avail = unlockedThrough(1)
+    const { container } = render(
+      <SynthPanel patch={DEFAULT_PATCH} available={avail} compact onChange={() => {}} />,
+    )
+    const expected = MODULES.filter((m) => m.params.some((p) => avail.has(p)))
+    expect(container.querySelectorAll('.module')).toHaveLength(expected.length)
+    expect(expected.length).toBeLessThan(MODULES.length)
+  })
+
+  it('waechst mit dem Level mit', () => {
+    const counts = [1, 10, 31].map((lvl) => {
+      const avail = unlockedThrough(lvl)
+      const { container, unmount } = render(
+        <SynthPanel patch={DEFAULT_PATCH} available={avail} compact onChange={() => {}} />,
+      )
+      const n = container.querySelectorAll('.knob-wrap, .switch-wrap').length
+      unmount()
+      return n
+    })
+    expect(counts[0]).toBeLessThan(counts[1])
+    expect(counts[1]).toBeLessThan(counts[2])
+  })
+
+  it('zeigt im Normalmodus weiterhin das gesamte Panel', () => {
+    const avail = unlockedThrough(1)
+    const { container } = render(
+      <SynthPanel patch={DEFAULT_PATCH} available={avail} onChange={() => {}} />,
+    )
+    expect(container.querySelectorAll('.module')).toHaveLength(MODULES.length)
+    expect(container.querySelectorAll('.locked').length).toBeGreaterThan(0)
+  })
+})

@@ -20,6 +20,8 @@ export function EarTrainer() {
   const [result, setResult] = useState<ReturnType<typeof scoreGuess> | null>(null)
   const [revealed, setRevealed] = useState(false)
   const [audioError, setAudioError] = useState<string | null>(null)
+  // Compact panel is the default: beginners should only see the knobs they own.
+  const [compact, setCompact] = useState(() => localStorage.getItem('vdp.compact') !== '0')
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [lessonOpen, setLessonOpen] = useState(false)
   const [playingWhich, setPlayingWhich] = useState<'target' | 'guess' | null>(null)
@@ -166,6 +168,19 @@ export function EarTrainer() {
           <span className="lb-stars">{'★'.repeat(stars[level.id] ?? 0).padEnd(3, '☆')}</span>
           <span className="lb-prog">{available.size} Regler frei</span>
           <span className="lb-prog">{doneCount}/{LEVELS.length}</span>
+          <button
+            className={`icon-btn${compact ? ' on' : ''}`}
+            aria-pressed={compact}
+            onClick={() =>
+              setCompact((v) => {
+                localStorage.setItem('vdp.compact', v ? '0' : '1')
+                return !v
+              })
+            }
+            title={compact ? 'Alle Regler zeigen (auch gesperrte)' : 'Nur freigeschaltete Regler zeigen'}
+          >
+            {compact ? '◧' : '▦'}
+          </button>
           <button className={`icon-btn${lessonOpen ? ' on' : ''}`} onClick={() => setLessonOpen((v) => !v)} title="Lektion">?</button>
         </div>
       </div>
@@ -223,6 +238,7 @@ export function EarTrainer() {
         patch={guess}
         available={available}
         states={states}
+        compact={compact}
         meterActive={playingWhich !== null}
         onChange={(id, v) => setGuess((g) => ({ ...g, [id]: v }))}
       >

@@ -466,3 +466,16 @@ kbd {
   color: var(--txt); background: var(--bg3);
   border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
 }
+
+/*
+ * Kompaktmodus: nur freigeschaltete Regler. Die Module richten sich links aus
+ * und behalten ihre Breite, statt bei 1–2 Reglern über den Schirm zu spreizen.
+ */
+.synth-body.compact {
+  grid-template-columns: repeat(auto-fit, minmax(190px, max-content));
+  justify-content: start;
+}
+.synth-body.compact .module { min-width: 190px; }
+@media (max-width: 700px) {
+  .synth-body.compact { grid-template-columns: 1fr 1fr; }
+}

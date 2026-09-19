@@ -10,6 +10,7 @@ export function SynthPanel({
   onChange,
   available,
   states = {},
+  compact = false,
   title = 'MONOLITH-24',
   subtitle = 'ANALOG MODELLING SYNTHESIZER',
   meterActive,
@@ -21,6 +22,11 @@ export function SynthPanel({
   available: Set<ParamId>
   /** per-param correctness feedback */
   states?: Partial<Record<ParamId, 'ok' | 'off'>>
+  /**
+   * Hide everything that is still locked instead of greying it out. Keeps the
+   * early levels down to the handful of knobs that actually matter.
+   */
+  compact?: boolean
   title?: string
   subtitle?: string
   meterActive?: boolean
@@ -49,9 +55,12 @@ export function SynthPanel({
         </div>
       </div>
 
-      <div className="synth-body">
+      <div className={`synth-body${compact ? ' compact' : ''}`}>
         {MODULES.map((mod) => {
-          const visible = mod.params.filter((p) => PARAM_SPECS[p])
+          const known = mod.params.filter((p) => PARAM_SPECS[p])
+          // In compact mode a module only exists once it has an unlocked param.
+          const visible = compact ? known.filter((p) => available.has(p)) : known
+          if (visible.length === 0) return null
           const anyAvail = visible.some((p) => available.has(p))
           return (
             <div className={`module${anyAvail ? '' : ' module-locked'}`} key={mod.name}>

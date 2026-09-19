@@ -93,11 +93,22 @@ describe('synth panel rendering', () => {
     expect(studio.querySelectorAll('.knob-wrap.locked')).toHaveLength(0)
   })
 
-  it('shows locked knobs with a lock indicator in the trainer', () => {
+  it('zeigt im Trainer standardmaessig nur freigeschaltete Regler', () => {
     const { container } = render(<App />)
     const trainer = container.querySelector('.trainer')!
-    const locked = trainer.querySelectorAll('.knob-wrap.locked')
-    expect(locked.length).toBeGreaterThan(0)
+    // Kompaktmodus ist Standard: nichts Gesperrtes verstellt den Blick
+    expect(trainer.querySelectorAll('.knob-wrap.locked')).toHaveLength(0)
+    expect(trainer.querySelectorAll('.knob-lock')).toHaveLength(0)
+    expect(trainer.querySelectorAll('.module').length).toBeLessThan(MODULES.length)
+  })
+
+  it('zeigt gesperrte Regler mit Schloss, sobald der Nutzer alles einblendet', () => {
+    const { container } = render(<App />)
+    const trainer = container.querySelector('.trainer')!
+    const toggle = trainer.querySelector('.icon-btn[aria-pressed="true"]')!
+    fireEvent.click(toggle)
+    expect(trainer.querySelectorAll('.module')).toHaveLength(MODULES.length)
+    expect(trainer.querySelectorAll('.knob-wrap.locked').length).toBeGreaterThan(0)
     expect(trainer.querySelectorAll('.knob-lock').length).toBeGreaterThan(0)
   })
 
