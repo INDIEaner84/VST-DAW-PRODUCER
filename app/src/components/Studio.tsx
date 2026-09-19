@@ -466,7 +466,8 @@ export function Studio() {
           <div className="chords">
             {chords.map((c, i) => (
               <button key={i} className={`chord ${playing && Math.floor(pos / STEPS_PER_BAR) % chords.length === i ? 'active' : ''}`}
-                onMouseDown={async () => {
+                title={`${c.roman} — ${c.label} anspielen`}
+                onPointerDown={async () => {
                   await startAudio()
                   if (!ensureAudio()) return
                   chordNotes(c, 3).forEach((n) => chordSynth.current?.playNote(n, '2n', undefined, 0.5))
@@ -487,7 +488,8 @@ export function Studio() {
           <label className="inline">Oktave (PC-Tastatur)
             <input type="number" min={1} max={7} value={octave} onChange={(e) => setOctave(Number(e.target.value))} />
           </label>
-          <p className="hint">Ohne Controller: Tasten A W S E D F T G Z H U J spielen eine Oktave. Mod-Wheel (CC1) = Cutoff, CC74 = Resonance.</p>
+          <p className="hint">Ohne Controller: Tasten <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> <kbd>E</kbd> <kbd>D</kbd> <kbd>F</kbd> <kbd>T</kbd> <kbd>G</kbd> <kbd>Z</kbd> <kbd>H</kbd> <kbd>U</kbd> <kbd>J</kbd> spielen eine Oktave. Mod-Wheel (CC1) = Cutoff, CC74 = Resonance.</p>
+          <p className="hint"><kbd>Leertaste</kbd> Play/Stop · Regler: ziehen, scrollen oder <kbd>↑</kbd><kbd>↓</kbd> · <kbd>Shift</kbd> fein · <kbd>Bild↑</kbd><kbd>Bild↓</kbd> grob · <kbd>Pos1</kbd>/<kbd>Ende</kbd> Minimum/Maximum · Doppelklick zentriert.</p>
           <div className="cclog">{log.map((l, i) => <code key={i}>{l}</code>)}</div>
         </Section>
       </div>
@@ -505,6 +507,7 @@ export function Studio() {
                     <div
                       key={s}
                       className={`cell${s % 4 === 0 ? ' beat' : ''}${s % 16 === 0 ? ' bar' : ''}${s === pos && playing ? ' phead' : ''}`}
+                      title={`${midiToNote(midi)} · Takt ${Math.floor(s / STEPS_PER_BAR) + 1}, Schritt ${(s % STEPS_PER_BAR) + 1}`}
                       onClick={() =>
                         setNotes((ns) =>
                           ns.some((n) => n.midi === midi && n.start === s)
@@ -552,7 +555,8 @@ export function Studio() {
             <div className="drumrow" key={d}>
               <button
                 className={`pad${flash === d ? ' flash' : ''}`}
-                onMouseDown={async () => {
+                title={`${DRUM_LABELS[d]} anspielen`}
+                onPointerDown={async () => {
                   await startAudio()
                   if (!ensureAudio()) return
                   drums.current?.trigger(d)

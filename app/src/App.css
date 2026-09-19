@@ -206,7 +206,7 @@ body { margin: 0; background: var(--bg); color: var(--txt); font-family: 'Inter'
   margin: 0; font-size: 19px; letter-spacing: 5px; color: #f0e2c2;
   font-family: 'Courier New', monospace; text-shadow: 0 1px 0 #000, 0 0 16px rgba(255,176,32,.25);
 }
-.brandplate p { margin: 2px 0 0; font-size: 9px; letter-spacing: 2.6px; color: #8d8madd; color: #8d8578; }
+.brandplate p { margin: 2px 0 0; font-size: 9px; letter-spacing: 2.6px; color: #8d8578; }
 .screws { width: 12px; height: 12px; border-radius: 50%; background: radial-gradient(circle at 35% 30%, #6b665e, #2a2724); box-shadow: inset 0 0 0 1px #14120f; position: relative; }
 .screws::after { content: ''; position: absolute; inset: 4px 2px; border-top: 1.5px solid #14120f; transform: rotate(35deg); }
 
@@ -255,7 +255,7 @@ body { margin: 0; background: var(--bg); color: var(--txt); font-family: 'Inter'
 .knob-svg .arc-bg { fill: none; stroke: #191715; stroke-width: 4; stroke-linecap: round; }
 .knob-svg .arc { fill: none; stroke: var(--acc); stroke-width: 4; stroke-linecap: round; filter: drop-shadow(0 0 4px rgba(255,176,32,.6)); transition: stroke-dasharray .05s linear; }
 .knob-svg .cap-shadow { fill: rgba(0,0,0,.55); }
-.knob-svg .cap { fill: url(#none); fill: #171614; stroke: #0c0b0a; stroke-width: 1; }
+.knob-svg .cap { fill: #171614; stroke: #0c0b0a; stroke-width: 1; }
 .knob-svg .cap-top { fill: #2b2926; stroke: #3d3a35; stroke-width: .8; }
 .knob-svg .pointer { fill: #f5ead2; }
 .knob-label { font-size: 8.5px; letter-spacing: 1.1px; text-transform: uppercase; color: #a89f8e; text-align: center; line-height: 1.15; }
@@ -396,4 +396,73 @@ body { margin: 0; background: var(--bg); color: var(--txt); font-family: 'Inter'
   background: #2b2010;
   color: #ffd79a;
   font-size: 14px;
+}
+
+/* ---------- Bedienbarkeit: Fokus, Touch, Motion ---------- */
+
+/* Skip-Link: erst bei Tastaturfokus sichtbar */
+.skip-link {
+  position: absolute; left: 8px; top: -48px; z-index: 60;
+  background: var(--acc); color: #10131a; font-weight: 700;
+  padding: 9px 16px; border-radius: 0 0 8px 8px; text-decoration: none;
+  transition: top .16s ease;
+}
+.skip-link:focus { top: 0; }
+
+/*
+ * Ein einziger, überall sichtbarer Fokusring. :focus-visible zeigt ihn nur bei
+ * Tastaturnavigation, Mausklicks bleiben also optisch ruhig.
+ */
+:focus-visible {
+  outline: 2px solid var(--acc);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+.app-header nav button:focus-visible,
+.transport:focus-visible,
+.big:focus-visible,
+.pad:focus-visible,
+.chord:focus-visible,
+.level-btn:focus-visible {
+  outline-offset: 3px;
+}
+
+/* Zeiger-Feedback: was klickbar ist, fühlt sich auch so an */
+.transport, .big, .pad, .chord, .sw, .level-btn, .icon-btn, .ab { touch-action: manipulation; }
+.transport:active, .big:active, .pad:active, .chord:active { transform: translateY(1px); }
+
+/*
+ * Knob & Pads dürfen beim Ziehen/Tippen nicht die Seite scrollen oder den
+ * Text markieren – sonst ist Drehen auf Touchgeräten unmöglich.
+ */
+.knob { touch-action: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+.pad, .chord, .cell, .note, .step { -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+.pad, .step { touch-action: manipulation; }
+
+/* Mindestgröße für Touch-Ziele auf Zeigergeräten ohne Feinsteuerung */
+@media (pointer: coarse) {
+  .transport, .big, .pad, .chord { min-height: 44px; }
+  .icon-btn { width: 36px; height: 36px; }
+  .knob { width: 64px; height: 64px; }
+  .knob-wrap { width: 70px; }
+}
+
+/* Respektiert die Systemeinstellung „Bewegung reduzieren“ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+    scroll-behavior: auto !important;
+  }
+  .ab:hover { transform: none; }
+}
+
+/* Tastenkürzel im Fließtext */
+kbd {
+  display: inline-block; min-width: 18px; text-align: center;
+  padding: 1px 5px; margin: 0 1px;
+  font-family: 'Courier New', monospace; font-size: 10.5px; line-height: 1.5;
+  color: var(--txt); background: var(--bg3);
+  border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px;
 }

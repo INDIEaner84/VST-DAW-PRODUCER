@@ -34,26 +34,33 @@ export function Knob({
 
   const norm = Math.max(0, Math.min(1, toNorm(value)))
   const angle = -140 + norm * 280
-  const dragging = useRef<{ y: number; n: number } | null>(null)
+  const dragging = useRef<{ y: number; n: number; id: number } | null>(null)
   const [active, setActive] = useState(false)
 
+  // Pointer events cover mouse, touch and pen with one code path, so the knob
+  // is usable on tablets and touch laptops instead of mouse-only.
   useEffect(() => {
     if (!active) return
-    const move = (e: MouseEvent) => {
-      if (!dragging.current) return
-      const dy = dragging.current.y - e.clientY
+    const move = (e: PointerEvent) => {
+      const d = dragging.current
+      if (!d || e.pointerId !== d.id) return
+      e.preventDefault()
+      const dy = d.y - e.clientY
       const speed = e.shiftKey ? 600 : 180
-      onChange(fromNorm(dragging.current.n + dy / speed))
+      onChange(fromNorm(d.n + dy / speed))
     }
-    const up = () => {
+    const up = (e: PointerEvent) => {
+      if (dragging.current && e.pointerId !== dragging.current.id) return
       dragging.current = null
       setActive(false)
     }
-    window.addEventListener('mousemove', move)
-    window.addEventListener('mouseup', up)
+    window.addEventListener('pointermove', move, { passive: false })
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
     return () => {
-      window.removeEventListener('mousemove', move)
-      window.removeEventListener('mouseup', up)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
     }
   }, [active, fromNorm, onChange])
 
@@ -69,22 +76,39 @@ export function Knob({
         role="slider"
         tabIndex={locked ? -1 : 0}
         aria-label={spec.label}
-        aria-valuenow={value}
-        onMouseDown={(e) => {
+        aria-valuenow={Number(value.toFixed(3))}
+        aria-valuemin={min}
+        aria-valuemax={max}
+        aria-valuetext={`${display}${spec.unit ?? ''}`}
+        aria-orientation="vertical"
+        aria-disabled={locked || undefined}
+        title={`${spec.label} — ziehen, scrollen oder Pfeiltasten. Shift = fein, Doppelklick = Mitte.`}
+        onPointerDown={(e) => {
           if (locked) return
           e.preventDefault()
-          dragging.current = { y: e.clientY, n: norm }
+          e.currentTarget.setPointerCapture?.(e.pointerId)
+          dragging.current = { y: e.clientY, n: norm, id: e.pointerId }
           setActive(true)
         }}
         onDoubleClick={() => !locked && onChange(fromNorm(0.5))}
         onWheel={(e) => {
           if (locked) return
-          onChange(fromNorm(norm - Math.sign(e.deltaY) * 0.03))
+          onChange(fromNorm(norm - Math.sign(e.deltaY) * (e.shiftKey ? 0.01 : 0.03)))
         }}
         onKeyDown={(e) => {
           if (locked) return
-          if (e.key === 'ArrowUp' || e.key === 'ArrowRight') onChange(fromNorm(norm + 0.02))
-          if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') onChange(fromNorm(norm - 0.02))
+          // Shift = fine steps, PageUp/Down = coarse, Home/End = limits
+          const step = e.shiftKey ? 0.005 : 0.02
+          let n: number | null = null
+          if (e.key === 'ArrowUp' || e.key === 'ArrowRight') n = norm + step
+          else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') n = norm - step
+          else if (e.key === 'PageUp') n = norm + 0.1
+          else if (e.key === 'PageDown') n = norm - 0.1
+          else if (e.key === 'Home') n = 0
+          else if (e.key === 'End') n = 1
+          if (n === null) return
+          e.preventDefault()
+          onChange(fromNorm(n))
         }}
       >
         <svg viewBox="0 0 64 64" className="knob-svg">
